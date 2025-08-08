@@ -1,0 +1,88 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: Swift Format Check
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Swift format
+        run: |
+          swift format --version
+          swift format lint -s -r Sources/ Tests/
+          if [ $? -ne 0 ]; then
+            echo "❌ Swift format check failed"
+            exit 1
+          fi
+          echo "✅ Swift format check passed"
+
+  test-apple-platforms:
+    name: Test Apple Platforms
+    runs-on: macos-15
+    strategy:
+      matrix:
+        destination: [
+          'platform=macOS',
+          'platform=iOS Simulator,name=iPhone 16 Pro',
+          'platform=watchOS Simulator,name=Apple Watch Ultra 2 (49mm)',
+          'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
+        ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Test ${{ matrix.destination }}
+        run: |
+          if [[ "${{ matrix.destination }}" == "platform=macOS" ]]; then
+            swift test --parallel
+          else
+            xcodebuild test \
+              -scheme swift-yahoo-finance \
+              -destination "${{ matrix.destination }}" \
+              -skipPackagePluginValidation \
+              -quiet
+          fi
+
+  test-linux:
+    name: Test Linux
+    runs-on: ubuntu-latest
+    container:
+      image: swift:latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Build
+        run: swift build
+
+      - name: Run tests
+        run: swift test --parallel
+
+  build-release:
+    name: Build Release
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build release
+        run: swift build -c release
