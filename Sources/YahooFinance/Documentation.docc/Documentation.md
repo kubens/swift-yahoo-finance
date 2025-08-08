@@ -29,8 +29,16 @@ let transport = MyClientTransport()
 // Initialize YahooFinance
 let yahooFinance = YahooFinance(transport: transport)
 
-// Fetch data (example implementation)
-let data = try await yahooFinance.perform(request, responseAs: MyDataType.self)
+// Create a request with query parameters
+let query: URLQuery = ["symbol": "AAPL", "interval": "1d"]
+let request = Request<StockData>(
+  authority: "query1.finance.yahoo.com",
+  path: "/v8/finance/chart",
+  query: query
+)
+
+// Fetch data
+let stockData = try await yahooFinance.perform(request)
 ```
 
 ## Topics
@@ -38,7 +46,10 @@ let data = try await yahooFinance.perform(request, responseAs: MyDataType.self)
 ### Core Components
 
 - ``YahooFinance``
+- ``Request``
+- ``URLQuery``
 - ``ClientTransport``
+- ``UserAgent``
 
 ### Error Handling
 

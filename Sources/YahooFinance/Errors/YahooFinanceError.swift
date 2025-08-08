@@ -38,4 +38,10 @@ public enum YahooFinanceError: Error, Sendable {
   ///
   /// - Parameter underlying: The original decoding error that occurred
   case decodingError(Error)
+
+  /// Invalid URL construction.
+  ///
+  /// This error occurs when a URL cannot be properly constructed from the provided components,
+  /// such as invalid base URLs, malformed paths, or problematic query parameters.
+  case invalidURL
 }

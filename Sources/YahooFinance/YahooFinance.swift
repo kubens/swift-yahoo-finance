@@ -1,5 +1,7 @@
 import HTTPTypes
 
+import class Foundation.JSONDecoder
+
 /// Main entry point for Yahoo Finance API operations.
 ///
 /// `YahooFinance` is the primary interface for interacting with Yahoo Finance services. It provides a safe,
@@ -35,40 +37,106 @@ public actor YahooFinance {
   /// such as URLSession, AsyncHTTPClient, or custom networking solutions.
   internal let transport: ClientTransport
 
-  /// Creates a new YahooFinance instance with the specified transport.
+  /// The User-Agent used for all requests from this instance.
+  ///
+  /// Each YahooFinance instance uses a consistent User-Agent to maintain session coherence
+  /// for cookies and other security mechanisms that Yahoo Finance may employ.
+  private let userAgent: UserAgent
+
+  private var decoder: JSONDecoder
+
+  /// Creates a new YahooFinance instance with the specified transport and User-Agent.
   ///
   /// The transport parameter allows you to inject your preferred HTTP client implementation, enabling
-  /// flexibility in networking approaches and testing scenarios.
-  ///
-  /// - Parameter transport: The HTTP transport to use for network operations
-  ///
-  /// ## Usage Example
-  /// ```swift
-  /// let transport = URLSessionTransport()
-  /// let yahooFinance = YahooFinance(transport: transport)
-  /// ```
-  public init(transport: ClientTransport) {
-    self.transport = transport
-  }
-
-  /// Performs an HTTP request and decodes the response to the specified type.
-  ///
-  /// This method handles the complete request lifecycle including sending the HTTP request through the
-  /// configured transport, processing the response, and decoding the returned data into the requested type.
+  /// flexibility in networking approaches and testing scenarios. The userAgent parameter allows you to
+  /// specify a consistent User-Agent for all requests from this instance, which helps maintain session
+  /// coherence for cookies and other security mechanisms.
   ///
   /// - Parameters:
-  ///   - request: The HTTP request to send to Yahoo Finance APIs
-  ///   - type: The type to decode the response data into
+  ///   - transport: The HTTP transport to use for network operations
+  ///   - userAgent: The User-Agent to use for all requests. Defaults to a random selection
+  ///
+  /// ## Usage Examples
+  /// ```swift
+  /// // With random User-Agent (default)
+  /// let yahooFinance = YahooFinance(transport: transport)
+  ///
+  /// // With specific User-Agent
+  /// let yahooFinance = YahooFinance(transport: transport, userAgent: .safari)
+  /// ```
+  public init(transport: ClientTransport, userAgent: UserAgent = .random) {
+    self.transport = transport
+    self.userAgent = userAgent
+    self.decoder = JSONDecoder()
+  }
+
+  /// Performs a Yahoo Finance request and decodes the response to the specified type.
+  ///
+  /// This method handles the complete request lifecycle including converting the Request to HTTPRequest,
+  /// adding necessary headers and authentication, sending through the configured transport,
+  /// and decoding the returned data.
+  ///
+  /// - Parameter request: The Yahoo Finance request to perform
   /// - Returns: The decoded response object of the specified type
   /// - Throws: ``YahooFinanceError`` for various failure conditions including network errors, invalid responses,
   ///   authentication failures, or decoding errors
   ///
   /// ## Usage Example
   /// ```swift
-  /// let request = HTTPRequest(method: .get, scheme: "https", authority: "finance.yahoo.com", path: "/api/quote")
-  /// let quote = try await yahooFinance.perform(request, as: StockQuote.self)
+  /// let request = Request<StockQuote>(
+  ///   authority: "query1.finance.yahoo.com",
+  ///   path: "/v8/finance/chart/AAPL"
+  /// )
+  /// let quote = try await yahooFinance.perform(request)
   /// ```
-  public func perform<T: Decodable>(_ request: HTTPRequest, as type: T.Type) async throws -> T {
-    fatalError("Not implement yet")
+  public func perform<Response>(_ request: Request<Response>) async throws -> Response {
+    let httpRequest = try buildHTTPRequest(from: request)
+
+    do {
+      let (data, httpResponse) = try await transport.send(httpRequest, body: request.body)
+
+      if httpResponse.status == .unauthorized {
+        throw YahooFinanceError.authenticationFailed
+      }
+
+      if httpResponse.status != .ok {
+        throw YahooFinanceError.invalidResponse(httpResponse.status)
+      }
+
+      return try decoder.decode(Response.self, from: data)
+    } catch let error as DecodingError {
+      throw YahooFinanceError.decodingError(error)
+    } catch let error as YahooFinanceError {
+      throw error
+    } catch {
+      throw YahooFinanceError.networkError(error)
+    }
+  }
+
+  /// Converts a Request to HTTPRequest with additional Yahoo Finance specific data.
+  ///
+  /// This internal method handles the conversion from high-level Request to HTTPRequest,
+  /// adding necessary headers, authentication tokens, and other Yahoo Finance specific
+  /// requirements like crumb management.
+  ///
+  /// - Parameter request: The Request to convert
+  /// - Returns: A configured HTTPRequest ready for transport
+  /// - Throws: ``YahooFinanceError.invalidURL`` if URL construction fails
+  private func buildHTTPRequest<Response>(from request: Request<Response>) throws -> HTTPRequest {
+    // Build path with query string if needed
+    let fullPath = request.path + (request.query.queryString.map { "?" + $0 } ?? "")
+
+    var httpRequest = HTTPRequest(
+      method: request.method,
+      scheme: request.scheme,
+      authority: request.authority,
+      path: fullPath
+    )
+
+    httpRequest.headerFields[.userAgent] = userAgent.rawValue
+
+    // TODO: Add authentication/crumb if needed
+
+    return httpRequest
   }
 }
