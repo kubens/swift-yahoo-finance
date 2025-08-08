@@ -4,7 +4,8 @@
 import PackageDescription
 
 let package = Package(
-  name: "yahoo-finance",
+  name: "swift-yahoo-finance",
+  platforms: [.macOS(.v12), .iOS(.v15), .watchOS(.v8), .tvOS(.v13)],
   products: [
     // Products define the executables and libraries a package produces, making them visible to other packages.
     .library(
