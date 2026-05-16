@@ -11,7 +11,7 @@ concurrency:
 jobs:
   format:
     name: Swift Format Check
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
 
   test-apple-platforms:
     name: Test Apple Platforms
-    runs-on: macos-15
+    runs-on: macos-26
     strategy:
       matrix:
         destination: [
@@ -79,7 +79,7 @@ jobs:
 
   build-release:
     name: Build Release
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
